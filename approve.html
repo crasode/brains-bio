@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Approve Access — Admin</title>
+<style>
+  body{margin:0;background:#0C3824;font-family:system-ui,sans-serif;color:#F5F5EB;display:flex;justify-content:center;padding:60px 20px;}
+  .card{background:#F5F5EB;color:#0C3824;max-width:640px;width:100%;padding:40px;box-sizing:border-box;}
+  input{width:100%;box-sizing:border-box;border:1px solid #C9CBB4;padding:12px 14px;font-size:15px;}
+  button{background:#D95700;color:#F5F5EB;border:none;padding:13px 26px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;margin-top:14px;}
+  code,textarea{display:block;background:#0C3824;color:#B9E0C7;padding:14px;font-size:13px;word-break:break-all;margin-top:16px;border:none;width:100%;box-sizing:border-box;font-family:ui-monospace,monospace;}
+  ol{font-size:14px;line-height:1.7;color:#42574A;}
+  a{color:#D95700;}
+</style></head><body>
+<div class="card">
+  <h1 style="margin:0;font-size:24px;">Approve investor access</h1>
+  <p style="font-size:14px;color:#42574A;">This page is for Brains admins. It converts an email into the code the site checks against. No data leaves this page.</p>
+  <input id="em" placeholder="investor email from the NDA submission">
+  <button id="go">Generate approval code</button>
+  <div id="out"></div>
+  <ol>
+    <li>Get the signer's email from the Netlify Forms notification (or the Forms tab).</li>
+    <li>Paste it above → Generate. Copy the code.</li>
+    <li>Open <a href="https://github.com/crasode/brains-bio/edit/main/approved.json" target="_blank">approved.json on GitHub</a> and add the code to the list, in quotes, comma-separated:<br><code style="display:inline;padding:2px 6px;">{ "approved": ["code1", "code2"] }</code></li>
+    <li>Commit — the site updates in ~1 minute. The investor enters their email on the site and is let in.</li>
+  </ol>
+  <p style="font-size:13px;color:#9A9A8C;">To revoke someone, remove their code from approved.json and commit.</p>
+</div>
+<script>
+document.getElementById('go').onclick=function(){
+  var em=document.getElementById('em').value.trim().toLowerCase();
+  if(!em||em.indexOf('@')<0){ alert('Enter a valid email'); return; }
+  crypto.subtle.digest('SHA-256', new TextEncoder().encode(em)).then(function(buf){
+    var hex=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+    document.getElementById('out').innerHTML='<textarea rows="2" readonly onclick="this.select()">"'+hex+'"</textarea><p style="font-size:13px;color:#42574A;">Click to select, copy, paste into approved.json (keep the quotes).</p>';
+  });
+};
+</script>
+</body></html>

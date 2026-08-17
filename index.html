@@ -823,7 +823,7 @@ window.FLS_TEXT = window.FLS_PARAS.join("\n\n");
   function load(){ try { return JSON.parse(localStorage.getItem(KEY)||'{}'); } catch(e){ return {}; } }
   function save(o){ try { localStorage.setItem(KEY, JSON.stringify(o)); } catch(e){} }
   var state = load();
-  var step = state.signed ? 3 : 1;
+  var step = state.approved ? 4 : (state.signed ? 3 : 1);
   var kind = 'individual', hasSig = false, sigCanvas = null;
 
   var stepsBar = document.getElementById('stepsBar');
@@ -831,9 +831,10 @@ window.FLS_TEXT = window.FLS_PARAS.join("\n\n");
 
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function today(){ return new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'}); }
+  function sha256hex(s){ return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function(buf){ return Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0');}).join(''); }); }
 
   function renderSteps(){
-    var defs=[['1','Forward-Looking'],['2','Sign NDA'],['3','Presentation']];
+    var defs=[['1','Forward-Looking'],['2','Sign NDA'],['3','Approval'],['4','Presentation']];
     stepsBar.innerHTML = defs.map(function(d,i){
       var active = step===i+1, done = step>i+1;
       var bg = active?'#D95700':(done?'#F5F5EB':'transparent');
@@ -943,9 +944,35 @@ window.FLS_TEXT = window.FLS_PARAS.join("\n\n");
     if (step===3) {
       var sg = state.signed || {};
       panel.innerHTML = '<div class="card" style="text-align:center;padding:52px;">'+
+        '<div style="width:56px;height:56px;border-radius:50%;border:2px solid #D95700;color:#D95700;display:inline-flex;align-items:center;justify-content:center;font-size:24px;">⏳</div>'+
+        '<h1 style="font-family:\'Cormorant Garamond\',serif;font-weight:400;font-size:36px;margin:22px 0 0;color:#0C3824;">NDA Received — Approval Pending</h1>'+
+        '<p style="font-size:15px;line-height:1.6;color:#42574A;margin:14px auto 0;max-width:560px;">Thank you'+(sg.name?', <strong>'+esc(sg.name)+'</strong>':'')+'. Your signed Agreement has been received. Access to the presentation is granted individually — you will be notified once your access is approved. You can check your status below at any time.</p>'+
+        '<div style="display:flex;gap:10px;justify-content:center;align-items:stretch;margin-top:30px;flex-wrap:wrap;">'+
+        '<input class="field" id="apEmail" placeholder="Email used on the NDA" style="max-width:320px;text-align:center;" value="'+esc(sg.email||'')+'">'+
+        '<button class="btn orange" id="apCheck">Check Approval Status</button></div>'+
+        '<div id="apMsg"></div></div>';
+      document.getElementById('apCheck').onclick=function(){
+        var em = document.getElementById('apEmail').value.trim().toLowerCase();
+        var msg = document.getElementById('apMsg');
+        if (!em || em.indexOf('@')<0){ msg.innerHTML='<div class="err" style="text-align:left;">Enter the email address you used on the NDA.</div>'; return; }
+        var btn=document.getElementById('apCheck'); btn.disabled=true; btn.textContent='Checking…';
+        Promise.all([ sha256hex(em), fetch('./approved.json?ts='+Date.now()).then(function(r){return r.json();}) ])
+          .then(function(res){
+            var hash=res[0], list=(res[1]&&res[1].approved)||[];
+            if (list.indexOf(hash)>=0){ state.approved=em; save(state); step=4; render(); window.scrollTo(0,0); }
+            else { btn.disabled=false; btn.textContent='Check Approval Status';
+              msg.innerHTML='<div style="margin-top:16px;background:#EBEBDD;padding:14px 18px;font-size:13.5px;color:#42574A;text-align:left;">Your access has not been approved yet. Approvals are typically processed within one business day — please check back, or contact <a href="mailto:calvin@brainsbio.com">calvin@brainsbio.com</a>.</div>'; }
+          })
+          .catch(function(){ btn.disabled=false; btn.textContent='Check Approval Status';
+            msg.innerHTML='<div class="err" style="text-align:left;">Could not check status — please try again in a moment.</div>'; });
+      };
+    }
+    if (step===4) {
+      var sg = state.signed || {};
+      panel.innerHTML = '<div class="card" style="text-align:center;padding:52px;">'+
         '<div style="width:56px;height:56px;border-radius:50%;background:#0C3824;color:#F5F5EB;display:inline-flex;align-items:center;justify-content:center;font-size:26px;">✓</div>'+
         '<h1 style="font-family:\'Cormorant Garamond\',serif;font-weight:400;font-size:36px;margin:22px 0 0;color:#0C3824;">Access Granted</h1>'+
-        '<p style="font-size:15px;line-height:1.6;color:#42574A;margin:14px auto 0;max-width:520px;">The Agreement was executed by <strong>'+esc(sg.name)+'</strong> on '+esc(sg.date)+'. The presentation is confidential — please treat it accordingly.</p>'+
+        '<p style="font-size:15px;line-height:1.6;color:#42574A;margin:14px auto 0;max-width:520px;">The Agreement was executed by <strong>'+esc(sg.name)+'</strong> on '+esc(sg.date)+' and your access has been approved. The presentation is confidential — please treat it accordingly.</p>'+
         '<div style="display:flex;gap:14px;justify-content:center;margin-top:32px;flex-wrap:wrap;">'+
         '<button class="btn orange" id="openDeck">Open the Presentation</button>'+
         '<button class="btn" id="dlNda" style="background:none;border:1px solid #0C3824;color:#0C3824;">Download Signed NDA (PDF)</button></div></div>';
