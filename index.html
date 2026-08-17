@@ -37,7 +37,8 @@
 </style>
 </head><body>
 <!-- Netlify form definition (static, for build-time detection) -->
-<form name="nda" method="POST" action="/" data-netlify="true" netlify netlify-honeypot="bot-field" hidden>
+<form name="nda" method="POST" action="/signed.html" data-netlify="true" netlify-honeypot="bot-field" hidden>
+  <input type="hidden" name="form-name" value="nda">
   <input type="text" name="bot-field">
   <input type="text" name="recipient-type">
   <input type="text" name="entity">
@@ -923,15 +924,11 @@ window.FLS_TEXT = "This presentation contains forward-looking statements or info
           'entity': isEnt?v('fEntity'):'—', 'name': v('fName'), 'title': isEnt?v('fTitle'):'—',
           'email': v('fEmail'), 'address': v('fAddress'), 'date': today(), 'timestamp': new Date().toISOString(),
           'signature-png': (function(){ var sc=document.createElement('canvas'); sc.width=500; sc.height=Math.round(500*sigCanvas.height/sigCanvas.width); var sctx=sc.getContext('2d'); sctx.fillStyle='#fff'; sctx.fillRect(0,0,sc.width,sc.height); sctx.drawImage(sigCanvas,0,0,sc.width,sc.height); return sc.toDataURL('image/jpeg',0.8); })() };
-        var body = Object.keys(rec).concat(['form-name']).map(function(k){
-          return encodeURIComponent(k)+'='+encodeURIComponent(k==='form-name'?'nda':rec[k]); }).join('&');
-        fetch('/', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: body })
-          .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r; })
-          .catch(function(e){ try{ var log=JSON.parse(localStorage.getItem('bb-submit-errors')||'[]'); log.push({t:new Date().toISOString(), e:String(e)}); localStorage.setItem('bb-submit-errors', JSON.stringify(log)); }catch(x){} })
-          .then(function(){
-            state = { step:3, signed: rec };
-            save(state); step=3; render(); window.scrollTo(0,0);
-          });
+        state = { step:3, signed: rec };
+        save(state);
+        var f = document.forms['nda'];
+        Object.keys(rec).forEach(function(k){ if (f.elements[k]) f.elements[k].value = rec[k]; });
+        f.submit();
       };
     }
     if (step===3) {
