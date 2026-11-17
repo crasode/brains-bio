@@ -20,7 +20,7 @@
       <h1 style="font-family:'Cormorant Garamond',serif;font-weight:400;font-size:32px;margin:0;color:#0C3824;">Signed NDA Records</h1>
       <span style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#939A73;">Internal — Brains Bioceutical Corp.</span>
     </div>
-    <p style="font-size:14px;line-height:1.6;color:#42574A;margin:16px 0 0;">Export the submissions from Netlify (Forms → nda → <strong>Download as CSV</strong>), then load that file here. Pick a signer to generate their fully executed agreement — complete NDA text with their details and signature — and save it as a PDF.</p>
+    <p style="font-size:14px;line-height:1.6;color:#42574A;margin:16px 0 0;">Export the submissions from Netlify (Forms → nda → <strong>Download as CSV</strong>), then load that file here. Pick a signer to generate their accepted agreement and save it as a PDF. Each record is produced on the form of agreement that person accepted: the Wall-Crossing Agreement with its Acceptance Record, or the prior NDA with drawn signature.</p>
     <div style="margin-top:22px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
       <input type="file" id="csv" accept=".csv,text/csv" style="font-size:14px;">
     </div>
@@ -28,8 +28,10 @@
   </div>
 </div>
 <div id="doc" style="display:none;color:#1a1a1a;padding:40px;font-size:12px;line-height:1.5;font-family:Archivo,system-ui,sans-serif;"></div>
+<script src="./agreement.js"></script>
+<script src="./executed.js"></script>
 <script>
-// Verbatim NDA text — Confidentiality and Non-Disclosure Agreement (Brains Bioceutical Corp.)
+// Legacy NDA text (Confidentiality and Non-Disclosure Agreement). Used for records signed before the Wall-Crossing Agreement went live.
 window.NDA_SECTIONS = [
 {h:"Recitals", b:[
 "THIS CONFIDENTIALITY AND NON-DISCLOSURE AGREEMENT (this \"Agreement\") is made as of the date on which it is last executed by the parties (the \"Effective Date\") between: BRAINS BIOCEUTICAL CORP., a corporation existing under the laws of British Columbia, Canada (the \"Company\"); and the person identified as the Recipient on the execution page of this Agreement (the \"Recipient\").",
@@ -129,8 +131,10 @@ window.FLS_TEXT = window.FLS_PARAS.join("\n\n");
     return rows;
   }
   function findCol(headers, needles){
-    for (var i=0;i<headers.length;i++){ var h=headers[i].toLowerCase();
-      for (var j=0;j<needles.length;j++) if (h.indexOf(needles[j])>=0) return i; }
+    var i,j,h;
+    for (j=0;j<needles.length;j++) for (i=0;i<headers.length;i++){ if (headers[i].toLowerCase().trim()===needles[j]) return i; }
+    for (i=0;i<headers.length;i++){ h=headers[i].toLowerCase();
+      for (j=0;j<needles.length;j++) if (h.indexOf(needles[j])>=0) return i; }
     return -1;
   }
   var subs=[];
@@ -143,11 +147,14 @@ window.FLS_TEXT = window.FLS_PARAS.join("\n\n");
       var H=rows[0];
       var col={ name:findCol(H,['name']), entity:findCol(H,['entity']), title:findCol(H,['title']),
         email:findCol(H,['email']), address:findCol(H,['address']), date:findCol(H,['date','created','submitted']),
-        type:findCol(H,['recipient']), sig:findCol(H,['signature']) };
+        type:findCol(H,['recipient-type','recipient']), sig:findCol(H,['signature-png','signature']) };
+      var X=['capacity','investor-advised','jurisdiction','eligibility','access-individuals','instrument-6-3a','acknowledgements','typed-name','agreement-version','timestamp','ip'];
+      var xc={}; X.forEach(function(k){ xc[k]=findCol(H,[k]); });
       subs=rows.slice(1).filter(function(r){ return r.length>1; }).map(function(r){
         return { name:r[col.name]||'', entity:r[col.entity]||'', title:r[col.title]||'',
           email:r[col.email]||'', address:r[col.address]||'', date:r[col.date]||'',
           type:r[col.type]||'', sig:r[col.sig]||'' };
+      }).map(function(o,n){ var r=rows.slice(1).filter(function(r){ return r.length>1; })[n]; o.x={}; X.forEach(function(k){ o.x[k]=xc[k]>=0?(r[xc[k]]||''):''; }); return o;
       });
       renderList();
     };
@@ -156,13 +163,21 @@ window.FLS_TEXT = window.FLS_PARAS.join("\n\n");
   function renderList(){
     var el=document.getElementById('list');
     if (!subs.length){ el.innerHTML='<p style="color:#9A9A8C;">No submissions in file.</p>'; return; }
-    el.innerHTML='<table><tr><th>Name</th><th>Entity</th><th>Email</th><th>Date</th><th></th></tr>'+
-      subs.map(function(s,i){ return '<tr class="row" data-i="'+i+'"><td>'+esc(s.name)+'</td><td>'+esc(s.entity)+'</td><td>'+esc(s.email)+'</td><td>'+esc(s.date)+'</td><td style="text-align:right;"><button class="btn dark" data-i="'+i+'" style="padding:8px 16px;font-size:11px;">Executed PDF</button></td></tr>'; }).join('')+'</table>';
+    el.innerHTML='<table><tr><th>Name</th><th>Entity</th><th>Email</th><th>Date</th><th>Agreement</th><th></th></tr>'+
+      subs.map(function(s,i){ return '<tr class="row" data-i="'+i+'"><td>'+esc(s.name)+'</td><td>'+esc(s.entity)+'</td><td>'+esc(s.email)+'</td><td>'+esc(s.date)+'</td><td>'+esc(s.x['agreement-version']||'NDA (prior form)')+'</td><td style="text-align:right;"><button class="btn dark" data-i="'+i+'" style="padding:8px 16px;font-size:11px;">Executed PDF</button></td></tr>'; }).join('')+'</table>';
     el.querySelectorAll('[data-i]').forEach(function(n){ n.addEventListener('click', function(ev){ ev.stopPropagation(); openDoc(+n.getAttribute('data-i')); }); });
   }
   function openDoc(i){
     var s=subs[i];
     var d=document.getElementById('doc');
+    if (s.x['agreement-version']){
+      var rec={ 'recipient-type':s.type, entity:s.entity, name:s.name, title:s.title, email:s.email, address:s.address };
+      Object.keys(s.x).forEach(function(k){ rec[k]=s.x[k]; });
+      if (!rec.timestamp) rec.timestamp=s.date;
+      d.innerHTML=window.BB_renderExecuted(rec);
+      setTimeout(function(){window.print();},50);
+      return;
+    }
     d.innerHTML='<div style="text-align:center;font-size:18px;font-weight:600;margin-bottom:6px;">Confidentiality and Non-Disclosure Agreement</div>'+
       '<div style="text-align:center;font-size:12px;color:#555;margin-bottom:22px;">Brains Bioceutical Corp. — executed electronically</div>'+
       window.NDA_SECTIONS.map(function(sec){ return '<div style="margin-bottom:14px;"><div style="font-weight:600;margin-bottom:5px;">'+esc(sec.h)+'</div>'+sec.b.map(function(p){return '<p style="margin:0 0 7px;">'+esc(p)+'</p>';}).join('')+'</div>'; }).join('')+
